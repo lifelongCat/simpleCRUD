@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: 'postgres:16.2'
+    env_file: .env
+    ports:
+      - "54321:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 1s
+      timeout: 1s
+      retries: 60
+    restart: always
+  migrator:
+    image: 'amacneil/dbmate:2.14'
+    volumes:
+      - ./migrations:/db/migrations
+    command: -u "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable" up
+    depends_on:
+      postgres:
+        condition: service_healthy
+  crud:
+    build: .
+    env_file: .env
+    command: uvicorn app.main:app --host 0.0.0.0 --port ${FASTAPI_PORT}
+    ports:
+      - ${FASTAPI_PORT}:${FASTAPI_PORT}
+    stop_signal: SIGINT
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
